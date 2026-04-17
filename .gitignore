@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Environment variables (CRITICAL - contains secrets!)
+.env
+.env.local
+.env.production
+.env.development
+.env*.local
+
+# Supabase (if you use local development)
+supabase/.temp
+supabase/.branches
+supabase/.docker
