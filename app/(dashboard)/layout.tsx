@@ -1,7 +1,22 @@
 import { redirect } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { createClient } from "@/lib/supabase/server";
+
+function getInitials(fullName: string | null | undefined, email: string) {
+  const source = fullName?.trim() || email;
+  const parts = source.split(/\s+/).filter(Boolean);
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
 
 export default async function DashboardLayout({
   children,
@@ -11,50 +26,62 @@ export default async function DashboardLayout({
   const supabase = await createClient();
   const {
     data: { user },
-    error,
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (error || !user) {
+  if (userError || !user) {
     redirect("/login");
   }
 
-  async function handleSignOut() {
-    "use server";
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("full_name, avatar_url, onboarding_completed")
+    .eq("id", user.id)
+    .maybeSingle();
 
-    const serverClient = await createClient();
-    const { error: signOutError } = await serverClient.auth.signOut();
+  if (profileError) {
+    redirect(`/login?error=${encodeURIComponent(profileError.message)}`);
+  }
 
-    if (signOutError) {
-      redirect(`/login?error=${encodeURIComponent(signOutError.message)}`);
-    }
+  if (!profile?.onboarding_completed) {
+    redirect("/onboarding");
+  }
 
-    redirect("/login?message=Signed out successfully.");
+  const { data: membership, error: membershipError } = await supabase
+    .from("workspace_members")
+    .select("workspace_id, workspaces(name, slug)")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (membershipError || !membership?.workspace_id || !membership.workspaces) {
+    redirect(`/login?error=${encodeURIComponent(membershipError?.message ?? "No workspace found.")}`);
+  }
+
+  const workspaceRecord = Array.isArray(membership.workspaces)
+    ? membership.workspaces[0]
+    : membership.workspaces;
+
+  if (!workspaceRecord?.name || !workspaceRecord.slug) {
+    redirect("/onboarding");
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <div>
-            <p className="text-sm font-medium text-teal-700">Clareeva workspace</p>
-            <h1 className="text-lg font-semibold text-slate-950">Dashboard</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium text-slate-900">
-                {user.user_metadata.full_name ?? user.email}
-              </p>
-              <p className="text-xs text-slate-500">{user.email}</p>
-            </div>
-            <form action={handleSignOut}>
-              <Button type="submit" variant="outline">
-                Sign out
-              </Button>
-            </form>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
-    </div>
+    <DashboardShell
+      workspace={{
+        id: membership.workspace_id,
+        name: workspaceRecord.name,
+        slug: workspaceRecord.slug,
+      }}
+      user={{
+        fullName: profile.full_name ?? user.user_metadata.full_name ?? null,
+        email: user.email ?? "",
+        avatarUrl: profile.avatar_url,
+        initials: getInitials(profile.full_name ?? user.user_metadata.full_name, user.email ?? "CU"),
+      }}
+    >
+      {children}
+    </DashboardShell>
   );
 }
