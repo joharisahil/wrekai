@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { resolveSafeNextPath } from "@/lib/integrations/slack";
+
 const slackScopes = [
   "channels:read",
   "channels:history",
@@ -12,10 +14,12 @@ function appUrl() {
   return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const clientId = process.env.SLACK_CLIENT_ID;
     const redirectUri = process.env.SLACK_REDIRECT_URI;
+    const requestUrl = new URL(request.url);
+    const nextPath = resolveSafeNextPath(requestUrl.searchParams.get("next"), "/onboarding/done");
 
     if (!clientId || !redirectUri) {
       return NextResponse.redirect(
@@ -30,6 +34,7 @@ export async function GET() {
     authUrl.searchParams.set("client_id", clientId);
     authUrl.searchParams.set("scope", slackScopes.join(","));
     authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("state", nextPath);
 
     return NextResponse.redirect(authUrl);
   } catch (error) {

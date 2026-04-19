@@ -283,6 +283,11 @@ export async function uploadFeedbackFileAction(
   formData: FormData,
 ): Promise<OnboardingActionState> {
   const uploadedFile = formData.get("feedbackFile");
+  const redirectTo = typeof formData.get("redirectTo") === "string" ? formData.get("redirectTo") : null;
+  const nextPath =
+    typeof redirectTo === "string" && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
+      ? redirectTo
+      : "/onboarding/done";
 
   if (!(uploadedFile instanceof File) || uploadedFile.size === 0) {
     return {
@@ -380,7 +385,7 @@ export async function uploadFeedbackFileAction(
     };
   }
 
-  redirect("/onboarding/done");
+  redirect(nextPath);
 }
 
 export async function completeOnboardingAction() {

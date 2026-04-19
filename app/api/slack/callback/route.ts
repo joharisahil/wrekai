@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 
 import { NextRequest, NextResponse } from "next/server";
 
+import { getCurrentWorkspaceId, resolveSafeNextPath } from "@/lib/integrations/slack";
 import { createClient } from "@/lib/supabase/server";
 
 type SlackOAuthResponse = {
@@ -24,6 +25,7 @@ function appUrl() {
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const oauthError = request.nextUrl.searchParams.get("error");
+  const nextPath = resolveSafeNextPath(request.nextUrl.searchParams.get("state"), "/onboarding/done");
   const clientId = process.env.SLACK_CLIENT_ID;
   const clientSecret = process.env.SLACK_CLIENT_SECRET;
   const redirectUri = process.env.SLACK_REDIRECT_URI;
@@ -59,24 +61,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data: membership, error: membershipError } = await supabase
-      .from("workspace_members")
-      .select("workspace_id")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (membershipError || !membership?.workspace_id) {
-      return NextResponse.redirect(
-        new URL(
-          `/onboarding/connect?error=${encodeURIComponent(
-            membershipError?.message ?? "No workspace found for this account.",
-          )}`,
-          appUrl(),
-        ),
-      );
-    }
+    const workspaceId = await getCurrentWorkspaceId(supabase, user.id);
 
     const response = await fetch("https://slack.com/api/oauth.v2.access", {
       method: "POST",
@@ -124,7 +109,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { error: integrationError } = await supabase.from("integrations").insert({
-      workspace_id: membership.workspace_id,
+      workspace_id: workspaceId,
       type: "slack",
       credentials: {
         access_token: payload.authed_user?.access_token ?? payload.access_token,
@@ -144,9 +129,12 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected Slack callback error.";
     return NextResponse.redirect(
-      new URL(`/onboarding/connect?error=${encodeURIComponent(message)}`, appUrl()),
+      new URL(
+        `${nextPath.startsWith("/dashboard") ? nextPath : "/onboarding/connect"}?error=${encodeURIComponent(message)}`,
+        appUrl(),
+      ),
     );
   }
 
-  return NextResponse.redirect(new URL("/onboarding/done", appUrl()));
+  return NextResponse.redirect(new URL(nextPath, appUrl()));
 }
