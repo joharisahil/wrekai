@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { resolveSafeNextPath } from "@/lib/integrations/slack";
 
@@ -11,15 +11,20 @@ const slackScopes = [
 ];
 
 function appUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const url = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (!url) {
+    throw new Error("NEXT_PUBLIC_APP_URL is not configured.");
+  }
+
+  return url;
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const clientId = process.env.SLACK_CLIENT_ID;
     const redirectUri = process.env.SLACK_REDIRECT_URI;
-    const requestUrl = new URL(request.url);
-    const nextPath = resolveSafeNextPath(requestUrl.searchParams.get("next"), "/onboarding/done");
+    const nextPath = resolveSafeNextPath(request.nextUrl.searchParams.get("next"), "/dashboard");
 
     if (!clientId || !redirectUri) {
       return NextResponse.redirect(
@@ -36,7 +41,7 @@ export async function GET(request: Request) {
     authUrl.searchParams.set("redirect_uri", redirectUri);
     authUrl.searchParams.set("state", nextPath);
 
-    return NextResponse.redirect(authUrl);
+    return Response.redirect(authUrl.toString());
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to start the Slack OAuth flow.";

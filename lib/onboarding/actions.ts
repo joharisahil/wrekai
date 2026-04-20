@@ -279,11 +279,24 @@ export async function saveCompanyDetailsAction(
 }
 
 export async function uploadFeedbackFileAction(
-  _previousState: OnboardingActionState,
-  formData: FormData,
+  previousStateOrFormData: OnboardingActionState | FormData,
+  formData?: FormData,
 ): Promise<OnboardingActionState> {
-  const uploadedFile = formData.get("feedbackFile");
-  const redirectTo = typeof formData.get("redirectTo") === "string" ? formData.get("redirectTo") : null;
+  const uploadFormData =
+    formData ?? (previousStateOrFormData instanceof FormData ? previousStateOrFormData : null);
+
+  if (!uploadFormData) {
+    return {
+      errors: {
+        form: "Upload form data was missing. Please try again.",
+      },
+      toast: "Upload failed. Please try again.",
+    };
+  }
+
+  const uploadedFile = uploadFormData.get("feedbackFile");
+  const redirectTo =
+    typeof uploadFormData.get("redirectTo") === "string" ? uploadFormData.get("redirectTo") : null;
   const nextPath =
     typeof redirectTo === "string" && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
       ? redirectTo

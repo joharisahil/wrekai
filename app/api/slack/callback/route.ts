@@ -19,13 +19,19 @@ type SlackOAuthResponse = {
 };
 
 function appUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const url = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (!url) {
+    throw new Error("NEXT_PUBLIC_APP_URL is not configured.");
+  }
+
+  return url;
 }
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const oauthError = request.nextUrl.searchParams.get("error");
-  const nextPath = resolveSafeNextPath(request.nextUrl.searchParams.get("state"), "/onboarding/done");
+  const nextPath = resolveSafeNextPath(request.nextUrl.searchParams.get("state"), "/dashboard");
   const clientId = process.env.SLACK_CLIENT_ID;
   const clientSecret = process.env.SLACK_CLIENT_SECRET;
   const redirectUri = process.env.SLACK_REDIRECT_URI;
@@ -136,5 +142,5 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL(nextPath, appUrl()));
+  return Response.redirect(`${appUrl()}${nextPath}`);
 }

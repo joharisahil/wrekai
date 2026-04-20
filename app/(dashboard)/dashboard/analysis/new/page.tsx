@@ -1,19 +1,36 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { redirect } from "next/navigation";
 
-export default function NewAnalysisPage() {
+import { AnalysisConfig } from "@/components/analysis/AnalysisConfig";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getAnalysisIntegrations } from "@/lib/analysis/queries";
+import { getCurrentWorkspaceId } from "@/lib/integrations/slack";
+import { createClient } from "@/lib/supabase/server";
+
+export default async function NewAnalysisPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    redirect("/login");
+  }
+
+  const workspaceId = await getCurrentWorkspaceId(supabase, user.id);
+  const integrations = await getAnalysisIntegrations(supabase, workspaceId);
+
   return (
     <div className="mx-auto max-w-3xl">
-      <Card>
+      <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
         <CardHeader>
-          <CardTitle>New analysis</CardTitle>
+          <CardTitle className="text-2xl">Run New Analysis</CardTitle>
           <CardDescription>
-            Your onboarding success screen now links here. This page is ready for the analysis
-            builder flow.
+            Choose the feedback window, connected sources, and an optional focus area.
           </CardDescription>
         </CardHeader>
-        <CardContent className="text-sm leading-6 text-slate-600">
-          Next, we can build the analysis setup form with source selection, date ranges, and
-          background processing states.
+        <CardContent>
+          <AnalysisConfig integrations={integrations} />
         </CardContent>
       </Card>
     </div>
